@@ -115,7 +115,7 @@ export const signOut = async (req, res, next) => {
   try {
     res.clearCookie("token", {
       httpOnly: true,
-      secure: false,
+      secure: process.env.NODE_ENV === "production",
       sameSite: "None",
     });
 
