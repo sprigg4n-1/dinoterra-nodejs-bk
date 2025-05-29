@@ -16,7 +16,7 @@ import arcjetMiddlewares from "./middlewares/arcjet.middleware.js";
 const app = express();
 
 const privateCors = cors({
-  origin: "http://localhost:3000",
+  origin: ["http://localhost:3000", "https://dinoterra-nodejs-bk.onrender.com"],
   credentials: true,
 });
 
