@@ -16,14 +16,18 @@ import arcjetMiddlewares from "./middlewares/arcjet.middleware.js";
 const app = express();
 
 const privateCors = cors({
-  origin: ["http://localhost:3000", "https://dinoterra-164h.vercel.app/"],
+  origin: [
+    "http://localhost:3000",
+    "https://dinoterra-164h.vercel.app",
+    "https://dinoterra-nodejs-bk.onrender.com/",
+  ],
   credentials: true,
 });
 
 const publicCors = cors();
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: false, limit: "10mb" }));
 app.use(cookieParser());
 // app.use(arcjetMiddlewares);
 // app.use(cors());

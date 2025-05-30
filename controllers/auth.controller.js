@@ -6,6 +6,8 @@ import { JWT_EXPIRES_IN, JWT_SECRET } from "../config/env.js";
 
 import User from "../models/user.model.js";
 
+const isProduction = process.env.NODE_ENV === "production";
+
 export const signUp = async (req, res, next) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -93,8 +95,8 @@ export const signIn = async (req, res, next) => {
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: true,
-      sameSite: "None",
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "lax",
       maxAge: 24 * 60 * 60 * 1000,
     });
 
@@ -115,8 +117,8 @@ export const signOut = async (req, res, next) => {
   try {
     res.clearCookie("token", {
       httpOnly: true,
-      secure: false,
-      sameSite: "None",
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "lax",
     });
 
     res.status(200).json({

@@ -1,12 +1,27 @@
 import mongoose from "mongoose";
 
 import Dino from "../models/dino.model.js";
+import DinoImage from "../models/dinoImage.model.js";
+import FoundLocation from "../models/foundLocation.model.js";
 
 export const getDinos = async (req, res, next) => {
   try {
     const dinos = await Dino.find();
+    const images = await DinoImage.find();
 
-    res.status(200).json({ success: true, data: dinos });
+    const imageMap = {};
+    images.forEach((img) => {
+      if (!imageMap[img.dino]) {
+        imageMap[img.dino] = img.file;
+      }
+    });
+
+    const dinosWithImages = dinos.map((dino) => ({
+      ...dino.toObject(),
+      image: imageMap[dino._id] || "",
+    }));
+
+    res.status(200).json({ success: true, data: dinosWithImages });
   } catch (error) {
     next(error);
   }
@@ -17,7 +32,6 @@ export const getSimilarDinos = async (req, res, next) => {
     const { id } = req.params;
 
     const baseDino = await Dino.findById(id);
-
     if (!baseDino) {
       const error = new Error("Dino not found");
       error.status = 404;
@@ -30,7 +44,23 @@ export const getSimilarDinos = async (req, res, next) => {
       dinoDiet: baseDino.dinoDiet,
     }).limit(5);
 
-    res.status(200).json({ success: true, data: similarDinos });
+    const images = await DinoImage.find({
+      dino: { $in: similarDinos.map((d) => d._id) },
+    });
+
+    const imageMap = {};
+    images.forEach((img) => {
+      if (!imageMap[img.dino]) {
+        imageMap[img.dino] = img.file;
+      }
+    });
+
+    const result = similarDinos.map((dino) => ({
+      ...dino.toObject(),
+      image: imageMap[dino._id] || "",
+    }));
+
+    res.status(200).json({ success: true, data: result });
   } catch (error) {
     next(error);
   }
@@ -40,7 +70,25 @@ export const getFiveRandomDinos = async (req, res, next) => {
   try {
     const dinos = await Dino.aggregate([{ $sample: { size: 5 } }]);
 
-    res.status(200).json({ success: true, data: dinos });
+    const dinoIds = dinos.map((d) => d._id);
+
+    const images = await DinoImage.find({
+      dino: { $in: dinoIds },
+    });
+
+    const imageMap = {};
+    images.forEach((img) => {
+      if (!imageMap[img.dino]) {
+        imageMap[img.dino] = img.file;
+      }
+    });
+
+    const dinosWithImages = dinos.map((dino) => ({
+      ...dino,
+      image: imageMap[dino._id] || "",
+    }));
+
+    res.status(200).json({ success: true, data: dinosWithImages });
   } catch (error) {
     next(error);
   }
@@ -55,7 +103,8 @@ export const getRecommendDinos = async (req, res, next) => {
 
 export const getDino = async (req, res, next) => {
   try {
-    const dino = await Dino.findById(req.params.id);
+    const dinoId = req.params.id;
+    const dino = await Dino.findById(dinoId);
 
     if (!dino) {
       const error = new Error("Dino not found");
@@ -63,7 +112,19 @@ export const getDino = async (req, res, next) => {
       throw error;
     }
 
-    res.status(200).json({ success: true, data: dino });
+    const [images, foundLocations] = await Promise.all([
+      DinoImage.find({ dino: dinoId }),
+      FoundLocation.find({ dino: dinoId }),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        dino,
+        images,
+        foundLocations,
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -192,6 +253,137 @@ export const deleteDino = async (req, res, next) => {
       message: "Dino deleted successfully",
       data: {
         dino: deletedDino,
+      },
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    next(error);
+  }
+};
+
+export const uploadPhoto = async (req, res, next) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const body = req.body;
+
+    const newImages = await DinoImage.create(body);
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(201).json({
+      success: true,
+      message: "Image added successfully",
+      data: {
+        Image: newImages[0],
+      },
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    next(error);
+  }
+};
+
+export const deletePhoto = async (req, res, next) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const imageId = req.params.id;
+
+    const deletedImage = await DinoImage.findByIdAndDelete(imageId, {
+      session,
+    });
+
+    if (!deletedImage) {
+      const error = new Error("Image not found");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(200).json({
+      success: true,
+      message: "Image deleted successfully",
+      data: {
+        dino: deletedImage,
+      },
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    next(error);
+  }
+};
+
+export const getFoundLocations = async (req, res, next) => {
+  try {
+    const foundLocations = await FoundLocation.find();
+
+    res.status(200).json({ success: true, data: foundLocations });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const addFoundLocation = async (req, res, next) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const body = req.body;
+
+    const newFoundLocations = await FoundLocation.create(body);
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(201).json({
+      success: true,
+      message: "FoundLocation added successfully",
+      data: {
+        Image: newFoundLocations[0],
+      },
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    next(error);
+  }
+};
+
+export const deleteFoundLocation = async (req, res, next) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const foundLocationId = req.params.id;
+
+    const deletedFoundLocation = await FoundLocation.findByIdAndDelete(
+      foundLocationId,
+      {
+        session,
+      }
+    );
+
+    if (!deletedFoundLocation) {
+      const error = new Error("Found location not found");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(200).json({
+      success: true,
+      message: "FoundLocation deleted successfully",
+      data: {
+        dino: deletedFoundLocation,
       },
     });
   } catch (error) {
