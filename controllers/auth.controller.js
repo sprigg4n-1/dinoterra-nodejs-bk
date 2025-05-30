@@ -96,7 +96,7 @@ export const signIn = async (req, res, next) => {
     res.cookie("token", token, {
       httpOnly: true,
       secure: isProduction,
-      sameSite: isProduction ? "none" : "lax",
+      sameSite: isProduction ? "lax" : "lax",
       maxAge: 24 * 60 * 60 * 1000,
     });
 
@@ -118,7 +118,7 @@ export const signOut = async (req, res, next) => {
     res.clearCookie("token", {
       httpOnly: true,
       secure: isProduction,
-      sameSite: isProduction ? "none" : "lax",
+      sameSite: isProduction ? "lax" : "lax",
     });
 
     res.status(200).json({
