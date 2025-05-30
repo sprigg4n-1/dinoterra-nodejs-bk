@@ -19,7 +19,7 @@ const privateCors = cors({
   origin: [
     "http://localhost:3000",
     "https://dinoterra-164h.vercel.app",
-    "https://dinoterra-nodejs-bk.onrender.com/",
+    "https://dinoterra-nodejs-bk.onrender.com",
   ],
   credentials: true,
 });

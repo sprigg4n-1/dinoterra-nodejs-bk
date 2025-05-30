@@ -95,10 +95,17 @@ export const signIn = async (req, res, next) => {
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? "lax" : "lax",
+      secure: true,
+      sameSite: "lax",
       maxAge: 24 * 60 * 60 * 1000,
     });
+
+    // res.cookie("token", token, {
+    //   httpOnly: true,
+    //   secure: false,
+    //   sameSite: "lax",
+    //   maxAge: 24 * 60 * 60 * 1000,
+    // });
 
     res.status(200).json({
       success: true,
@@ -117,9 +124,15 @@ export const signOut = async (req, res, next) => {
   try {
     res.clearCookie("token", {
       httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? "lax" : "lax",
+      secure: true,
+      sameSite: "lax",
     });
+
+    // res.clearCookie("token", {
+    //   httpOnly: true,
+    //   secure: false,
+    //   sameSite: "lax",
+    // });
 
     res.status(200).json({
       success: true,
