@@ -6,22 +6,69 @@ import FoundLocation from "../models/foundLocation.model.js";
 
 export const getDinos = async (req, res, next) => {
   try {
-    const dinos = await Dino.find();
-    const images = await DinoImage.find();
+    const {
+      page = 0,
+      size = 10,
+      name,
+      type,
+      diet,
+      period,
+      placeLocation,
+    } = req.query;
 
-    const imageMap = {};
-    images.forEach((img) => {
-      if (!imageMap[img.dino]) {
-        imageMap[img.dino] = img.file;
-      }
+    const matchStage = {
+      name: { $regex: name || "", $options: "i" },
+      typeOfDino: { $regex: type || "", $options: "i" },
+      diet: { $regex: diet || "", $options: "i" },
+      period: { $regex: period || "", $options: "i" },
+    };
+
+    if (placeLocation) {
+      matchStage["foundLocation.place"] = {
+        $regex: placeLocation,
+        $options: "i",
+      };
+    }
+
+    const aggregation = [
+      {
+        $lookup: {
+          from: "foundlocations",
+          localField: "_id",
+          foreignField: "dino",
+          as: "foundLocation",
+        },
+      },
+      { $match: matchStage },
+      {
+        $facet: {
+          data: [
+            { $skip: parseInt(page) * parseInt(size) },
+            { $limit: parseInt(size) },
+          ],
+          totalCount: [{ $count: "count" }],
+        },
+      },
+    ];
+
+    const result = await Dino.aggregate(aggregation);
+    const dinos = result[0].data;
+    const totalCount = result[0].totalCount[0]?.count || 0;
+
+    const dinosWithImages = await Promise.all(
+      dinos.map(async (dino) => {
+        const image = await DinoImage.findOne({ dino: dino._id });
+        return {
+          ...dino,
+          image: image?.file || "",
+        };
+      })
+    );
+
+    res.status(200).json({
+      success: true,
+      data: { dinos: dinosWithImages, count: totalCount },
     });
-
-    const dinosWithImages = dinos.map((dino) => ({
-      ...dino.toObject(),
-      image: imageMap[dino._id] || "",
-    }));
-
-    res.status(200).json({ success: true, data: dinosWithImages });
   } catch (error) {
     next(error);
   }
@@ -44,23 +91,18 @@ export const getSimilarDinos = async (req, res, next) => {
       dinoDiet: baseDino.dinoDiet,
     }).limit(5);
 
-    const images = await DinoImage.find({
-      dino: { $in: similarDinos.map((d) => d._id) },
-    });
+    const dinosWithImages = await Promise.all(
+      similarDinos.map(async (dino) => {
+        const image = await DinoImage.findOne({ dino: dino._id });
 
-    const imageMap = {};
-    images.forEach((img) => {
-      if (!imageMap[img.dino]) {
-        imageMap[img.dino] = img.file;
-      }
-    });
+        return {
+          ...dino.toObject(),
+          image: image.file || "",
+        };
+      })
+    );
 
-    const result = similarDinos.map((dino) => ({
-      ...dino.toObject(),
-      image: imageMap[dino._id] || "",
-    }));
-
-    res.status(200).json({ success: true, data: result });
+    res.status(200).json({ success: true, data: dinosWithImages });
   } catch (error) {
     next(error);
   }
@@ -70,23 +112,16 @@ export const getFiveRandomDinos = async (req, res, next) => {
   try {
     const dinos = await Dino.aggregate([{ $sample: { size: 5 } }]);
 
-    const dinoIds = dinos.map((d) => d._id);
+    const dinosWithImages = await Promise.all(
+      dinos.map(async (dino) => {
+        const image = await DinoImage.findOne({ dino: dino._id });
 
-    const images = await DinoImage.find({
-      dino: { $in: dinoIds },
-    });
-
-    const imageMap = {};
-    images.forEach((img) => {
-      if (!imageMap[img.dino]) {
-        imageMap[img.dino] = img.file;
-      }
-    });
-
-    const dinosWithImages = dinos.map((dino) => ({
-      ...dino,
-      image: imageMap[dino._id] || "",
-    }));
+        return {
+          ...dino,
+          image: image.file || "",
+        };
+      })
+    );
 
     res.status(200).json({ success: true, data: dinosWithImages });
   } catch (error) {
@@ -268,7 +303,7 @@ export const uploadPhoto = async (req, res, next) => {
   try {
     const body = req.body;
 
-    const newImages = await DinoImage.create(body);
+    const newImages = await DinoImage.create([body], session);
 
     await session.commitTransaction();
     session.endSession();
@@ -277,7 +312,7 @@ export const uploadPhoto = async (req, res, next) => {
       success: true,
       message: "Image added successfully",
       data: {
-        Image: newImages[0],
+        image: newImages[0],
       },
     });
   } catch (error) {
@@ -311,7 +346,7 @@ export const deletePhoto = async (req, res, next) => {
       success: true,
       message: "Image deleted successfully",
       data: {
-        dino: deletedImage,
+        image: deletedImage,
       },
     });
   } catch (error) {
@@ -323,7 +358,27 @@ export const deletePhoto = async (req, res, next) => {
 
 export const getFoundLocations = async (req, res, next) => {
   try {
-    const foundLocations = await FoundLocation.find();
+    const { place, period } = req.query;
+
+    const aggregation = [
+      {
+        $lookup: {
+          from: "dinos",
+          localField: "dino",
+          foreignField: "_id",
+          as: "dinoData",
+        },
+      },
+      { $unwind: "$dinoData" },
+      {
+        $match: {
+          place: { $regex: place || "", $options: "i" },
+          ...(period && { "dinoData.period": period }),
+        },
+      },
+    ];
+
+    const foundLocations = await FoundLocation.aggregate(aggregation);
 
     res.status(200).json({ success: true, data: foundLocations });
   } catch (error) {
@@ -337,7 +392,7 @@ export const addFoundLocation = async (req, res, next) => {
   try {
     const body = req.body;
 
-    const newFoundLocations = await FoundLocation.create(body);
+    const newFoundLocations = await FoundLocation.create([body], session);
 
     await session.commitTransaction();
     session.endSession();
@@ -346,7 +401,7 @@ export const addFoundLocation = async (req, res, next) => {
       success: true,
       message: "FoundLocation added successfully",
       data: {
-        Image: newFoundLocations[0],
+        foundLocation: newFoundLocations[0],
       },
     });
   } catch (error) {
@@ -383,7 +438,7 @@ export const deleteFoundLocation = async (req, res, next) => {
       success: true,
       message: "FoundLocation deleted successfully",
       data: {
-        dino: deletedFoundLocation,
+        foundLocation: deletedFoundLocation,
       },
     });
   } catch (error) {

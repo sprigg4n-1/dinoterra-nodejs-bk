@@ -93,20 +93,20 @@ export const signIn = async (req, res, next) => {
       expiresIn: JWT_EXPIRES_IN,
     });
 
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: true,
-      // sameSite: "none",
-      path: "/",
-      maxAge: 24 * 60 * 60 * 1000,
-    });
-
     // res.cookie("token", token, {
     //   httpOnly: true,
-    //   secure: false,
-    //   sameSite: "lax",
+    //   secure: true,
+    //   sameSite: "none",
+    //   path: "/",
     //   maxAge: 24 * 60 * 60 * 1000,
     // });
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+      maxAge: 24 * 60 * 60 * 1000,
+    });
 
     res.status(200).json({
       success: true,
@@ -123,18 +123,18 @@ export const signIn = async (req, res, next) => {
 
 export const signOut = async (req, res, next) => {
   try {
-    res.clearCookie("token", {
-      httpOnly: true,
-      secure: true,
-      // sameSite: "none",
-      path: "/",
-    });
-
     // res.clearCookie("token", {
     //   httpOnly: true,
-    //   secure: false,
-    //   sameSite: "lax",
+    //   secure: true,
+    //   sameSite: "none",
+    //   path: "/",
     // });
+
+    res.clearCookie("token", {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+    });
 
     res.status(200).json({
       success: true,

@@ -11,7 +11,6 @@ import dinoRouter from "./routes/dino.routes.js";
 import connectToDatabase from "./database/mongodb.js";
 
 import errorMiddleleware from "./middlewares/error.middleware.js";
-import arcjetMiddlewares from "./middlewares/arcjet.middleware.js";
 
 const app = express();
 
@@ -29,7 +28,6 @@ const publicCors = cors();
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: false, limit: "10mb" }));
 app.use(cookieParser());
-// app.use(arcjetMiddlewares);
 
 app.use("/api/v1/auth", privateCors, authRouter);
 app.use("/api/v1/users", publicCors, userRouter);
