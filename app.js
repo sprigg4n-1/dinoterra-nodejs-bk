@@ -7,6 +7,8 @@ import { PORT } from "./config/env.js";
 import authRouter from "./routes/auth.routes.js";
 import userRouter from "./routes/user.routes.js";
 import dinoRouter from "./routes/dino.routes.js";
+import archaeologistRouter from "./routes/archaeologist.routes.js";
+import expeditionRouter from "./routes/expedition.routes.js";
 
 import connectToDatabase from "./database/mongodb.js";
 
@@ -32,6 +34,8 @@ app.use(cookieParser());
 app.use("/api/v1/auth", privateCors, authRouter);
 app.use("/api/v1/users", publicCors, userRouter);
 app.use("/api/v1/dinos", publicCors, dinoRouter);
+app.use("/api/v1/archaeologists", publicCors, archaeologistRouter);
+app.use("/api/v1/expeditions", publicCors, expeditionRouter);
 
 app.use(errorMiddleleware);
 
