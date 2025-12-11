@@ -15,24 +15,22 @@ export const signUp = async (req, res, next) => {
   try {
     const { name, lastname, username, email, password, role } = req.body;
 
-    // check if a user already exists
-    const existingUserByEmail = await User.findOne({ email });
-
-    if (existingUserByEmail) {
-      const error = new Error("User with this email already exists");
-      error.statusCode = 409;
-      throw error;
-    }
-
     const existingUserByUsername = await User.findOne({ username });
-
     if (existingUserByUsername) {
-      const error = new Error("User with this username already exists");
-      error.statusCode = 409;
-      throw error;
+      return res.status(409).json({
+        success: false,
+        message: "User with this username already exists",
+      });
     }
 
-    // Hash password
+    const existingUserByEmail = await User.findOne({ email });
+    if (existingUserByEmail) {
+      return res.status(409).json({
+        success: false,
+        message: "User with this email already exists",
+      });
+    }
+
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
@@ -76,30 +74,24 @@ export const signIn = async (req, res, next) => {
     const user = await User.findOne({ username });
 
     if (!user) {
-      const error = new Error("User not found");
-      error.statusCode = 404;
-      throw error;
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
-      const error = new Error("Invalid password");
-      error.statusCode = 401;
-      throw error;
+      return res.status(401).json({
+        success: false,
+        message: "Invalid password",
+      });
     }
 
     const token = jwt.sign({ userId: user._id }, JWT_SECRET, {
       expiresIn: JWT_EXPIRES_IN,
     });
-
-    // res.cookie("token", token, {
-    //   httpOnly: true,
-    //   secure: true,
-    //   sameSite: "none",
-    //   path: "/",
-    //   maxAge: 24 * 60 * 60 * 1000,
-    // });
 
     res.cookie("token", token, {
       httpOnly: true,
@@ -123,13 +115,6 @@ export const signIn = async (req, res, next) => {
 
 export const signOut = async (req, res, next) => {
   try {
-    // res.clearCookie("token", {
-    //   httpOnly: true,
-    //   secure: true,
-    //   sameSite: "none",
-    //   path: "/",
-    // });
-
     res.clearCookie("token", {
       httpOnly: true,
       secure: false,
