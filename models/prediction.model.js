@@ -12,8 +12,13 @@ const top3ItemSchema = new mongoose.Schema(
 const feedbackSchema = new mongoose.Schema(
   {
     isCorrect: { type: Boolean, required: true },
-    correctRank: { type: Number, default: null },
-    correctClass: { type: String, default: null },
+    errorType: {
+      type: String,
+      enum: ["WRONG_SPECIES", "FALSE_NEGATIVE", "FALSE_POSITIVE", null],
+      default: null,
+    },
+    correctRank: { type: Number, default: null }, // 1, 2, 3 якщо правильно
+    correctClass: { type: String, default: null }, // якщо юзер знає вид
     givenBy: {
       type: String,
       enum: ["USER", "ADMIN"],

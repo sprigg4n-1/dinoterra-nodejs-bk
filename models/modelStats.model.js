@@ -12,6 +12,11 @@ const modelStatsSchema = new mongoose.Schema(
       top2: { type: Number, default: 0 },
       top3: { type: Number, default: 0 },
     },
+    errorStats: {
+      wrongSpecies: { type: Number, default: 0 }, // Stage 2 помилилась
+      falseNegative: { type: Number, default: 0 }, // динозавр → не динозавр
+      falsePositive: { type: Number, default: 0 }, // не динозавр → динозавр
+    },
     pendingRetrain: { type: Number, default: 0 },
     lastRetrain: { type: Date, default: null },
     lastRetrainResults: {

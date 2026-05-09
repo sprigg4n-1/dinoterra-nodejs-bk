@@ -35,6 +35,30 @@ const sendBase64ToML = async (endpoint, base64, mimeType) => {
   return response.json();
 };
 
+// ── Хелпер: відправити фото до ML для перенавчання ───────────────────────────
+const sendToMLFeedback = async (
+  predImage,
+  predictionId,
+  correctClass,
+  errorType,
+) => {
+  const { base64 } = parseBase64(predImage.file);
+  const buffer = Buffer.from(base64, "base64");
+  const form = new FormData();
+  form.append("file", buffer, {
+    filename: "image.jpg",
+    contentType: predImage.mimeType,
+  });
+  form.append("prediction_id", predictionId);
+  form.append("correct_class", correctClass);
+  form.append("error_type", errorType);
+
+  await fetch(`${ML_API_URL}/feedback`, {
+    method: "POST",
+    body: form,
+  });
+};
+
 // ── Хелпер: отримати або створити stats ──────────────────────────────────────
 const getOrCreateStats = async () => {
   let stats = await ModelStats.findOne();
@@ -57,9 +81,7 @@ export const classify = async (req, res, next) => {
     }
 
     const { base64, mimeType } = parseBase64(file);
-    console.log("Відправляємо до ML...");
     const mlResult = await sendBase64ToML("/predict", base64, mimeType);
-    console.log("ML результат:", mlResult);
 
     if (mlResult.error) {
       const error = new Error(mlResult.error);
@@ -120,7 +142,13 @@ export const giveFeedback = async (req, res, next) => {
 
   try {
     const { id } = req.params;
-    const { isCorrect, correctRank, correctClass, givenBy = "USER" } = req.body;
+    const {
+      isCorrect,
+      errorType, // WRONG_SPECIES | FALSE_NEGATIVE | FALSE_POSITIVE
+      correctRank, // 1, 2, 3 якщо правильно
+      correctClass, // якщо юзер знає вид
+      givenBy = "USER",
+    } = req.body;
 
     const prediction = await Prediction.findById(id).session(session);
 
@@ -138,6 +166,7 @@ export const giveFeedback = async (req, res, next) => {
 
     prediction.feedback = {
       isCorrect,
+      errorType: errorType || null,
       correctRank: correctRank || null,
       correctClass: correctClass || null,
       givenBy,
@@ -146,17 +175,33 @@ export const giveFeedback = async (req, res, next) => {
 
     await prediction.save({ session });
 
+    // ── Оновлюємо статистику ──────────────────────────────────────────────────
     const statsInc = { totalFeedback: 1 };
 
     if (isCorrect) {
+      // ✅ Варіант 1, 2, 3, 4 — правильно
       statsInc.correctFeedback = 1;
       if (correctRank === 1) statsInc["rankStats.top1"] = 1;
       if (correctRank === 2) statsInc["rankStats.top2"] = 1;
       if (correctRank === 3) statsInc["rankStats.top3"] = 1;
-    } else if (correctClass) {
+    } else if (errorType === "WRONG_SPECIES") {
+      // ❌ Варіант 5, 6 — Stage 1 ✅, Stage 2 ❌
       statsInc.wrongFeedback = 1;
+      statsInc["errorStats.wrongSpecies"] = 1;
+      if (correctClass) statsInc.pendingRetrain = 1;
+      else statsInc.unknownFeedback = 1;
+    } else if (errorType === "FALSE_NEGATIVE") {
+      // ❌ Варіант 7, 8 — динозавр → не динозавр
+      statsInc.wrongFeedback = 1;
+      statsInc["errorStats.falseNegative"] = 1;
+      statsInc.pendingRetrain = 1;
+    } else if (errorType === "FALSE_POSITIVE") {
+      // ❌ Варіант 9 — не динозавр → динозавр
+      statsInc.wrongFeedback = 1;
+      statsInc["errorStats.falsePositive"] = 1;
       statsInc.pendingRetrain = 1;
     } else {
+      // Юзер не знає
       statsInc.wrongFeedback = 1;
       statsInc.unknownFeedback = 1;
     }
@@ -167,29 +212,26 @@ export const giveFeedback = async (req, res, next) => {
       { upsert: true, session },
     );
 
-    // Якщо помилилась і юзер вказав клас — відправляємо фото до ML
-    if (!isCorrect && correctClass) {
+    // ── Відправляємо фото до ML для перенавчання ──────────────────────────────
+    const needsRetrain =
+      (errorType === "WRONG_SPECIES" && correctClass) ||
+      errorType === "FALSE_NEGATIVE" ||
+      errorType === "FALSE_POSITIVE";
+
+    if (!isCorrect && needsRetrain) {
       const predImage = await PredictionImage.findOne({
         prediction: prediction._id,
       });
 
       if (predImage) {
-        const { base64 } = parseBase64(predImage.file);
-        const buffer = Buffer.from(base64, "base64");
-        const form = new FormData();
-        form.append("file", buffer, {
-          filename: "image.jpg",
-          contentType: predImage.mimeType,
-        });
-        form.append("prediction_id", prediction.predictionId);
-        form.append("correct_class", correctClass);
+        const mlCorrectClass = correctClass || "unknown";
+        await sendToMLFeedback(
+          predImage,
+          prediction.predictionId,
+          mlCorrectClass,
+          errorType,
+        );
 
-        await fetch(`${ML_API_URL}/feedback`, {
-          method: "POST",
-          body: form,
-        });
-
-        // Позначаємо що фото використано для перенавчання
         await PredictionImage.findByIdAndUpdate(predImage._id, {
           usedForRetrain: true,
         });
