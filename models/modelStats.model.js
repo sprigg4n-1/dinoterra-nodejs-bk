@@ -11,11 +11,13 @@ const modelStatsSchema = new mongoose.Schema(
       top1: { type: Number, default: 0 },
       top2: { type: Number, default: 0 },
       top3: { type: Number, default: 0 },
+      correctNonDino: { type: Number, default: 0 }, // ← правильно не динозавр
     },
     errorStats: {
-      wrongSpecies: { type: Number, default: 0 }, // Stage 2 помилилась
-      falseNegative: { type: Number, default: 0 }, // динозавр → не динозавр
-      falsePositive: { type: Number, default: 0 }, // не динозавр → динозавр
+      wrongSpecies: { type: Number, default: 0 },
+      falseNegative: { type: Number, default: 0 },
+      falsePositive: { type: Number, default: 0 },
+      newSpecies: { type: Number, default: 0 },
     },
     pendingRetrain: { type: Number, default: 0 },
     lastRetrain: { type: Date, default: null },

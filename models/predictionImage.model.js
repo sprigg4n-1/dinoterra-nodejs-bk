@@ -11,6 +11,8 @@ const predictionImageSchema = new mongoose.Schema(
       index: true,
     },
     usedForRetrain: { type: Boolean, default: false },
+    correctClass: { type: String, default: null },
+    errorType: { type: String, default: null },
   },
   { timestamps: true },
 );

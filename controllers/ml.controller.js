@@ -35,30 +35,6 @@ const sendBase64ToML = async (endpoint, base64, mimeType) => {
   return response.json();
 };
 
-// ── Хелпер: відправити фото до ML для перенавчання ───────────────────────────
-const sendToMLFeedback = async (
-  predImage,
-  predictionId,
-  correctClass,
-  errorType,
-) => {
-  const { base64 } = parseBase64(predImage.file);
-  const buffer = Buffer.from(base64, "base64");
-  const form = new FormData();
-  form.append("file", buffer, {
-    filename: "image.jpg",
-    contentType: predImage.mimeType,
-  });
-  form.append("prediction_id", predictionId);
-  form.append("correct_class", correctClass);
-  form.append("error_type", errorType);
-
-  await fetch(`${ML_API_URL}/feedback`, {
-    method: "POST",
-    body: form,
-  });
-};
-
 // ── Хелпер: отримати або створити stats ──────────────────────────────────────
 const getOrCreateStats = async () => {
   let stats = await ModelStats.findOne();
@@ -144,9 +120,9 @@ export const giveFeedback = async (req, res, next) => {
     const { id } = req.params;
     const {
       isCorrect,
-      errorType, // WRONG_SPECIES | FALSE_NEGATIVE | FALSE_POSITIVE
-      correctRank, // 1, 2, 3 якщо правильно
-      correctClass, // якщо юзер знає вид
+      errorType,
+      correctRank,
+      correctClass,
       givenBy = "USER",
     } = req.body;
 
@@ -179,29 +155,36 @@ export const giveFeedback = async (req, res, next) => {
     const statsInc = { totalFeedback: 1 };
 
     if (isCorrect) {
-      // ✅ Варіант 1, 2, 3, 4 — правильно
       statsInc.correctFeedback = 1;
-      if (correctRank === 1) statsInc["rankStats.top1"] = 1;
-      if (correctRank === 2) statsInc["rankStats.top2"] = 1;
-      if (correctRank === 3) statsInc["rankStats.top3"] = 1;
+
+      // correctRank рахуємо тільки для динозаврів
+      if (prediction.isDinosaur) {
+        if (correctRank === 1) statsInc["rankStats.top1"] = 1;
+        if (correctRank === 2) statsInc["rankStats.top2"] = 1;
+        if (correctRank === 3) statsInc["rankStats.top3"] = 1;
+      } else {
+        // Не динозавр — правильно визначила Stage 1
+        statsInc["rankStats.correctNonDino"] = 1;
+      }
     } else if (errorType === "WRONG_SPECIES") {
-      // ❌ Варіант 5, 6 — Stage 1 ✅, Stage 2 ❌
       statsInc.wrongFeedback = 1;
       statsInc["errorStats.wrongSpecies"] = 1;
       if (correctClass) statsInc.pendingRetrain = 1;
       else statsInc.unknownFeedback = 1;
     } else if (errorType === "FALSE_NEGATIVE") {
-      // ❌ Варіант 7, 8 — динозавр → не динозавр
       statsInc.wrongFeedback = 1;
       statsInc["errorStats.falseNegative"] = 1;
       statsInc.pendingRetrain = 1;
     } else if (errorType === "FALSE_POSITIVE") {
-      // ❌ Варіант 9 — не динозавр → динозавр
       statsInc.wrongFeedback = 1;
       statsInc["errorStats.falsePositive"] = 1;
       statsInc.pendingRetrain = 1;
+    } else if (errorType === "NEW_SPECIES") {
+      statsInc.wrongFeedback = 1;
+      statsInc["errorStats.newSpecies"] = 1;
+      if (correctClass) statsInc.pendingRetrain = 1;
+      else statsInc.unknownFeedback = 1;
     } else {
-      // Юзер не знає
       statsInc.wrongFeedback = 1;
       statsInc.unknownFeedback = 1;
     }
@@ -212,30 +195,22 @@ export const giveFeedback = async (req, res, next) => {
       { upsert: true, session },
     );
 
-    // ── Відправляємо фото до ML для перенавчання ──────────────────────────────
+    // ── Позначаємо фото для перенавчання в MongoDB ────────────────────────────
     const needsRetrain =
       (errorType === "WRONG_SPECIES" && correctClass) ||
       errorType === "FALSE_NEGATIVE" ||
-      errorType === "FALSE_POSITIVE";
+      errorType === "FALSE_POSITIVE" ||
+      (errorType === "NEW_SPECIES" && correctClass);
 
     if (!isCorrect && needsRetrain) {
-      const predImage = await PredictionImage.findOne({
-        prediction: prediction._id,
-      });
-
-      if (predImage) {
-        const mlCorrectClass = correctClass || "unknown";
-        await sendToMLFeedback(
-          predImage,
-          prediction.predictionId,
-          mlCorrectClass,
-          errorType,
-        );
-
-        await PredictionImage.findByIdAndUpdate(predImage._id, {
+      await PredictionImage.findOneAndUpdate(
+        { prediction: prediction._id },
+        {
           usedForRetrain: true,
-        });
-      }
+          correctClass: correctClass || null,
+          errorType,
+        },
+      );
     }
 
     await session.commitTransaction();
@@ -282,7 +257,35 @@ export const adminClassify = async (req, res, next) => {
   }
 };
 
-// ── 4. GET PREDICTIONS (адмін) ────────────────────────────────────────────────
+// ── 4. GET RETRAIN IMAGES — для retrain.py ────────────────────────────────────
+export const getRetrainImages = async (req, res, next) => {
+  try {
+    const images = await PredictionImage.find({ usedForRetrain: true });
+
+    res.status(200).json({
+      success: true,
+      data: images,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ── 5. DELETE RETRAIN IMAGES — після перенавчання ─────────────────────────────
+export const deleteRetrainImages = async (req, res, next) => {
+  try {
+    const result = await PredictionImage.deleteMany({ usedForRetrain: true });
+
+    res.status(200).json({
+      success: true,
+      message: `Видалено ${result.deletedCount} фото після перенавчання`,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ── 6. GET PREDICTIONS (адмін) ────────────────────────────────────────────────
 export const getPredictions = async (req, res, next) => {
   try {
     const { page = 0, size = 10, isDinosaur, hasFeedback } = req.query;
@@ -319,7 +322,7 @@ export const getPredictions = async (req, res, next) => {
   }
 };
 
-// ── 5. GET STATS (адмін) ──────────────────────────────────────────────────────
+// ── 7. GET STATS (адмін) ──────────────────────────────────────────────────────
 export const getStats = async (req, res, next) => {
   try {
     const stats = await getOrCreateStats();
@@ -342,7 +345,7 @@ export const getStats = async (req, res, next) => {
   }
 };
 
-// ── 6. RETRAIN TRIGGER (адмін) ────────────────────────────────────────────────
+// ── 8. RETRAIN TRIGGER (адмін) ────────────────────────────────────────────────
 export const retrainTrigger = async (req, res, next) => {
   try {
     const response = await fetch(`${ML_API_URL}/retrain_trigger`, {
@@ -350,10 +353,6 @@ export const retrainTrigger = async (req, res, next) => {
     });
 
     const mlResult = await response.json();
-
-    if (mlResult.status === "Готово до перенавчання") {
-      await PredictionImage.deleteMany({ usedForRetrain: true });
-    }
 
     res.status(200).json({
       success: true,
