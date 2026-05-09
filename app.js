@@ -9,6 +9,7 @@ import userRouter from "./routes/user.routes.js";
 import dinoRouter from "./routes/dino.routes.js";
 import archaeologistRouter from "./routes/archaeologist.routes.js";
 import expeditionRouter from "./routes/expedition.routes.js";
+import mlRouter from "./routes/ml.routes.js";
 
 import connectToDatabase from "./database/mongodb.js";
 
@@ -36,6 +37,7 @@ app.use("/api/v1/users", publicCors, userRouter);
 app.use("/api/v1/dinos", publicCors, dinoRouter);
 app.use("/api/v1/archaeologists", publicCors, archaeologistRouter);
 app.use("/api/v1/expeditions", publicCors, expeditionRouter);
+app.use("/api/v1/ml", publicCors, mlRouter);
 
 app.use(errorMiddleleware);
 
