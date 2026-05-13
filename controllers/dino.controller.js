@@ -10,6 +10,7 @@ export const getDinos = async (req, res, next) => {
       page = 0,
       size = 10,
       name,
+      latinName,
       type,
       diet,
       period,
@@ -18,6 +19,7 @@ export const getDinos = async (req, res, next) => {
 
     const matchStage = {
       name: { $regex: name || "", $options: "i" },
+      latinName: { $regex: latinName || "", $options: "i" },
       typeOfDino: { $regex: type || "", $options: "i" },
       diet: { $regex: diet || "", $options: "i" },
       period: { $regex: period || "", $options: "i" },
@@ -62,7 +64,7 @@ export const getDinos = async (req, res, next) => {
           ...dino,
           image: image?.file || "",
         };
-      })
+      }),
     );
 
     res.status(200).json({
@@ -99,7 +101,7 @@ export const getSimilarDinos = async (req, res, next) => {
           ...dino.toObject(),
           image: image.file || "",
         };
-      })
+      }),
     );
 
     res.status(200).json({ success: true, data: dinosWithImages });
@@ -120,7 +122,7 @@ export const getFiveRandomDinos = async (req, res, next) => {
           ...dino,
           image: image.file || "",
         };
-      })
+      }),
     );
 
     res.status(200).json({ success: true, data: dinosWithImages });
@@ -208,7 +210,7 @@ export const createDino = async (req, res, next) => {
           dietDescription,
         },
       ],
-      { session }
+      { session },
     );
 
     await session.commitTransaction();
@@ -422,7 +424,7 @@ export const deleteFoundLocation = async (req, res, next) => {
       foundLocationId,
       {
         session,
-      }
+      },
     );
 
     if (!deletedFoundLocation) {

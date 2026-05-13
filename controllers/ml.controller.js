@@ -91,14 +91,14 @@ export const classify = async (req, res, next) => {
       { session },
     );
 
+    await session.commitTransaction();
+    session.endSession();
+
     await ModelStats.findOneAndUpdate(
       {},
       { $inc: { totalPredictions: 1 } },
-      { upsert: true, session },
+      { upsert: true },
     );
-
-    await session.commitTransaction();
-    session.endSession();
 
     res.status(201).json({
       success: true,
@@ -151,19 +151,38 @@ export const giveFeedback = async (req, res, next) => {
 
     await prediction.save({ session });
 
-    // ── Оновлюємо статистику ──────────────────────────────────────────────────
+    // ── Позначаємо фото для перенавчання в MongoDB ────────────────────────────
+    const needsRetrain =
+      (errorType === "WRONG_SPECIES" && correctClass) ||
+      errorType === "FALSE_NEGATIVE" ||
+      errorType === "FALSE_POSITIVE" ||
+      (errorType === "NEW_SPECIES" && correctClass);
+
+    if (!isCorrect && needsRetrain) {
+      await PredictionImage.findOneAndUpdate(
+        { prediction: prediction._id },
+        {
+          usedForRetrain: true,
+          correctClass: correctClass || null,
+          errorType,
+        },
+        { session },
+      );
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    // ── Оновлюємо статистику ПОЗА транзакцією ────────────────────────────────
     const statsInc = { totalFeedback: 1 };
 
     if (isCorrect) {
       statsInc.correctFeedback = 1;
-
-      // correctRank рахуємо тільки для динозаврів
       if (prediction.isDinosaur) {
         if (correctRank === 1) statsInc["rankStats.top1"] = 1;
         if (correctRank === 2) statsInc["rankStats.top2"] = 1;
         if (correctRank === 3) statsInc["rankStats.top3"] = 1;
       } else {
-        // Не динозавр — правильно визначила Stage 1
         statsInc["rankStats.correctNonDino"] = 1;
       }
     } else if (errorType === "WRONG_SPECIES") {
@@ -189,32 +208,7 @@ export const giveFeedback = async (req, res, next) => {
       statsInc.unknownFeedback = 1;
     }
 
-    await ModelStats.findOneAndUpdate(
-      {},
-      { $inc: statsInc },
-      { upsert: true, session },
-    );
-
-    // ── Позначаємо фото для перенавчання в MongoDB ────────────────────────────
-    const needsRetrain =
-      (errorType === "WRONG_SPECIES" && correctClass) ||
-      errorType === "FALSE_NEGATIVE" ||
-      errorType === "FALSE_POSITIVE" ||
-      (errorType === "NEW_SPECIES" && correctClass);
-
-    if (!isCorrect && needsRetrain) {
-      await PredictionImage.findOneAndUpdate(
-        { prediction: prediction._id },
-        {
-          usedForRetrain: true,
-          correctClass: correctClass || null,
-          errorType,
-        },
-      );
-    }
-
-    await session.commitTransaction();
-    session.endSession();
+    await ModelStats.findOneAndUpdate({}, { $inc: statsInc }, { upsert: true });
 
     res.status(200).json({
       success: true,
