@@ -225,6 +225,9 @@ export const giveFeedback = async (req, res, next) => {
 
 // ── 3. ADMIN CLASSIFY ─────────────────────────────────────────────────────────
 export const adminClassify = async (req, res, next) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const { file } = req.body;
 
@@ -243,11 +246,58 @@ export const adminClassify = async (req, res, next) => {
       throw error;
     }
 
+    // Зберігаємо передбачення в MongoDB
+    const newPrediction = await Prediction.create(
+      [
+        {
+          predictionId: `admin_${Date.now()}`,
+          user: req.user?._id || null,
+          isDinosaur: mlResult.is_dinosaur,
+          stage1Probability: mlResult.stage1_probability,
+          top3: [
+            {
+              rank: 1,
+              species: mlResult.species,
+              confidence: mlResult.confidence,
+            },
+          ],
+          feedback: null,
+        },
+      ],
+      { session },
+    );
+
+    await PredictionImage.create(
+      [
+        {
+          file,
+          mimeType,
+          prediction: newPrediction[0]._id,
+          usedForRetrain: false,
+        },
+      ],
+      { session },
+    );
+
+    await session.commitTransaction();
+    session.endSession();
+
+    await ModelStats.findOneAndUpdate(
+      {},
+      { $inc: { totalPredictions: 1 } },
+      { upsert: true },
+    );
+
     res.status(200).json({
       success: true,
-      data: mlResult,
+      data: {
+        ...mlResult,
+        _id: newPrediction[0]._id,
+      },
     });
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
     next(error);
   }
 };
