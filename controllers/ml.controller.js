@@ -5,6 +5,7 @@ import fetch from "node-fetch";
 import Prediction from "../models/prediction.model.js";
 import PredictionImage from "../models/predictionImage.model.js";
 import ModelStats from "../models/modelStats.model.js";
+import RetrainHistory from "../models/retrainHistory.model.js";
 
 const ML_API_URL = process.env.ML_API_URL || "http://localhost:8000";
 
@@ -339,18 +340,159 @@ export const getStats = async (req, res, next) => {
   }
 };
 
-// ── 8. RETRAIN TRIGGER (адмін) ────────────────────────────────────────────────
+// ── 9. START RETRAIN — створюємо запис в історії ─────────────────────────────
 export const retrainTrigger = async (req, res, next) => {
   try {
+    // Створюємо запис в історії
+    const retrainRecord = await RetrainHistory.create({
+      startedAt: new Date(),
+      status: "RUNNING",
+    });
+
     const response = await fetch(`${ML_API_URL}/retrain_trigger`, {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ retrainId: retrainRecord._id.toString() }),
     });
 
     const mlResult = await response.json();
 
     res.status(200).json({
       success: true,
-      data: mlResult,
+      data: {
+        ...mlResult,
+        retrainId: retrainRecord._id,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ── 10. FINISH RETRAIN — retrain.py викликає коли закінчив ───────────────────
+export const retrainDone = async (req, res, next) => {
+  try {
+    const {
+      retrainId,
+      imagesUsed,
+      newClasses = [],
+      stage1,
+      stage2,
+      status = "DONE",
+    } = req.body;
+
+    if (!retrainId) {
+      const error = new Error("retrainId is required");
+      error.status = 400;
+      throw error;
+    }
+
+    const retrainRecord = await RetrainHistory.findByIdAndUpdate(
+      retrainId,
+      {
+        finishedAt: new Date(),
+        imagesUsed: imagesUsed || 0,
+        newClasses,
+        status,
+        stage1: stage1
+          ? {
+              valAccuracy: stage1.val_accuracy,
+              valLoss: stage1.val_loss,
+              epochs: stage1.epochs,
+              history: {
+                accuracy: stage1.history_accuracy || [],
+                valAccuracy: stage1.history_val_accuracy || [],
+                loss: stage1.history_loss || [],
+                valLoss: stage1.history_val_loss || [],
+              },
+            }
+          : null,
+        stage2: stage2
+          ? {
+              valAccuracy: stage2.val_accuracy,
+              valLoss: stage2.val_loss,
+              epochs: stage2.epochs,
+              history: {
+                accuracy: stage2.history_accuracy || [],
+                valAccuracy: stage2.history_val_accuracy || [],
+                loss: stage2.history_loss || [],
+                valLoss: stage2.history_val_loss || [],
+              },
+            }
+          : null,
+      },
+      { new: true },
+    );
+
+    // Оновлюємо lastRetrain в ModelStats
+    await ModelStats.findOneAndUpdate(
+      {},
+      {
+        lastRetrain: new Date(),
+        pendingRetrain: 0,
+        "lastRetrainResults.stage1.valAccuracy": stage1?.val_accuracy || null,
+        "lastRetrainResults.stage1.valLoss": stage1?.val_loss || null,
+        "lastRetrainResults.stage2Dino.valAccuracy":
+          stage2?.val_accuracy || null,
+        "lastRetrainResults.stage2Dino.valLoss": stage2?.val_loss || null,
+      },
+      { upsert: true },
+    );
+
+    res.status(200).json({
+      success: true,
+      data: retrainRecord,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ── 11. GET RETRAIN HISTORY (адмін) ──────────────────────────────────────────
+export const getRetrainHistory = async (req, res, next) => {
+  try {
+    const { page = 0, size = 10 } = req.query;
+
+    const result = await RetrainHistory.aggregate([
+      {
+        $facet: {
+          data: [
+            { $sort: { createdAt: -1 } },
+            { $skip: parseInt(page) * parseInt(size) },
+            { $limit: parseInt(size) },
+          ],
+          totalCount: [{ $count: "count" }],
+        },
+      },
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        history: result[0].data,
+        count: result[0].totalCount[0]?.count || 0,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ── 12. GET RETRAIN HISTORY BY ID (адмін) ────────────────────────────────────
+export const getRetrainHistoryById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const record = await RetrainHistory.findById(id);
+
+    if (!record) {
+      const error = new Error("Retrain record not found");
+      error.status = 404;
+      throw error;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: record,
     });
   } catch (error) {
     next(error);

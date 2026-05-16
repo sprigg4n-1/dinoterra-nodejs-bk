@@ -8,6 +8,9 @@ import {
   getPredictions,
   getStats,
   retrainTrigger,
+  retrainDone,
+  getRetrainHistory,
+  getRetrainHistoryById,
 } from "../controllers/ml.controller.js";
 
 const mlRouter = Router();
@@ -21,6 +24,9 @@ mlRouter.post("/admin/classify", adminClassify);
 mlRouter.get("/admin/predictions", getPredictions);
 mlRouter.get("/admin/stats", getStats);
 mlRouter.post("/admin/retrain", retrainTrigger);
+mlRouter.post("/admin/retrain/done", retrainDone);
+mlRouter.get("/admin/retrain/history", getRetrainHistory);
+mlRouter.get("/admin/retrain/history/:id", getRetrainHistoryById);
 mlRouter.get("/admin/retrain-images", getRetrainImages);
 mlRouter.delete("/admin/retrain-images", deleteRetrainImages);
 
