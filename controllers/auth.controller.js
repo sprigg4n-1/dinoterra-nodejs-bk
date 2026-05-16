@@ -36,7 +36,7 @@ export const signUp = async (req, res, next) => {
 
     const newUsers = await User.create(
       [{ name, lastname, username, email, password: hashedPassword, role }],
-      { session }
+      { session },
     );
 
     const token = jwt.sign(
@@ -46,7 +46,7 @@ export const signUp = async (req, res, next) => {
       JWT_SECRET,
       {
         expiresIn: JWT_EXPIRES_IN,
-      }
+      },
     );
 
     await session.commitTransaction();
@@ -93,10 +93,17 @@ export const signIn = async (req, res, next) => {
       expiresIn: JWT_EXPIRES_IN,
     });
 
+    // res.cookie("token", token, {
+    //   httpOnly: true,
+    //   secure: false,
+    //   sameSite: "lax",
+    //   maxAge: 24 * 60 * 60 * 1000,
+    // });
+
     res.cookie("token", token, {
       httpOnly: true,
-      secure: false,
-      sameSite: "lax",
+      secure: true,
+      sameSite: "none",
       maxAge: 24 * 60 * 60 * 1000,
     });
 
@@ -115,10 +122,15 @@ export const signIn = async (req, res, next) => {
 
 export const signOut = async (req, res, next) => {
   try {
+    // res.clearCookie("token", {
+    //   httpOnly: true,
+    //   secure: false,
+    //   sameSite: "lax",
+    // });
     res.clearCookie("token", {
       httpOnly: true,
-      secure: false,
-      sameSite: "lax",
+      secure: true,
+      sameSite: "none",
     });
 
     res.status(200).json({
