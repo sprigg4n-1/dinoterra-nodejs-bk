@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-const favoriteDinoSchema = new mongoose.Schema(
+const favoriteDinoV2Schema = new mongoose.Schema(
   {
     user: {
       type: mongoose.Schema.Types.ObjectId,
@@ -10,7 +10,7 @@ const favoriteDinoSchema = new mongoose.Schema(
     },
     dino: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Dino",
+      ref: "DinoV2",
       required: true,
       index: true,
     },
@@ -18,8 +18,8 @@ const favoriteDinoSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-favoriteDinoSchema.index({ user: 1, dino: 1 }, { unique: true });
+favoriteDinoV2Schema.index({ user: 1, dino: 1 }, { unique: true });
 
-const FavoriteDino = mongoose.model("FavoriteDino", favoriteDinoSchema);
+const FavoriteDinoV2 = mongoose.model("FavoriteDinoV2", favoriteDinoV2Schema);
 
-export default FavoriteDino;
+export default FavoriteDinoV2;

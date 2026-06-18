@@ -1,8 +1,8 @@
 import mongoose from "mongoose";
 import User from "../models/user.model.js";
 import UserImage from "../models/userImage.model.js";
-import FavoriteDino from "../models/favoriteDino.js";
-import DinoImage from "../models/dinoImage.model.js";
+import FavoriteDinoV2 from "../models/favoriteDinoV2.model.js";
+import DinoV2Image from "../models/dinoV2Image.model.js";
 
 export const getUsers = async (req, res, next) => {
   try {
@@ -106,23 +106,25 @@ export const deletePhoto = async (req, res, next) => {
   }
 };
 
-export const getFavoriteDinos = async (req, res, next) => {
+export const getFavoriteDinosV2 = async (req, res, next) => {
   try {
-    const favDinos = await FavoriteDino.find({
+    const favDinos = await FavoriteDinoV2.find({
       user: req.params.userId,
     }).populate("dino");
 
     const result = await Promise.all(
-      favDinos.map(async (fav) => {
-        const image = await DinoImage.findOne({ dino: fav.dino._id });
+      favDinos
+        .filter((fav) => fav.dino != null)
+        .map(async (fav) => {
+          const image = await DinoV2Image.findOne({ dino: fav.dino._id, isMain: true });
 
-        return {
-          _id: fav._id,
-          user: fav.user,
-          dino: fav.dino,
-          image,
-        };
-      })
+          return {
+            _id: fav._id,
+            user: fav.user,
+            dino: fav.dino,
+            image,
+          };
+        })
     );
 
     res.status(200).json({ success: true, data: result });
@@ -131,21 +133,21 @@ export const getFavoriteDinos = async (req, res, next) => {
   }
 };
 
-export const addFavoriteDino = async (req, res, next) => {
+export const addFavoriteDinoV2 = async (req, res, next) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
     const body = req.body;
 
-    const newFavDinos = await FavoriteDino.create([body], { session });
+    const newFavDinos = await FavoriteDinoV2.create([body], { session });
 
     await session.commitTransaction();
     session.endSession();
 
     res.status(201).json({
       success: true,
-      message: "Favorite Dino added successfully",
+      message: "Favorite DinoV2 added successfully",
       data: {
         favDino: newFavDinos[0],
       },
@@ -157,7 +159,7 @@ export const addFavoriteDino = async (req, res, next) => {
   }
 };
 
-export const deleteFavoriteDino = async (req, res, next) => {
+export const deleteFavoriteDinoV2 = async (req, res, next) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -165,15 +167,13 @@ export const deleteFavoriteDino = async (req, res, next) => {
     const userId = req.params.userId;
     const dinoId = req.params.dinoId;
 
-    const deletedFavoriteDino = await FavoriteDino.findOneAndDelete(
+    const deletedFavoriteDino = await FavoriteDinoV2.findOneAndDelete(
       { user: userId, dino: dinoId },
-      {
-        session,
-      }
+      { session }
     );
 
     if (!deletedFavoriteDino) {
-      const error = new Error("Favorite Dino not found");
+      const error = new Error("Favorite DinoV2 not found");
       error.statusCode = 404;
       throw error;
     }
@@ -183,9 +183,9 @@ export const deleteFavoriteDino = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: "Favorite Dino deleted successfully",
+      message: "Favorite DinoV2 deleted successfully",
       data: {
-        image: deletedFavoriteDino,
+        favDino: deletedFavoriteDino,
       },
     });
   } catch (error) {
@@ -195,12 +195,12 @@ export const deleteFavoriteDino = async (req, res, next) => {
   }
 };
 
-export const isFavoriteDino = async (req, res, next) => {
+export const isFavoriteDinoV2 = async (req, res, next) => {
   try {
     const userId = req.params.userId;
     const dinoId = req.params.dinoId;
 
-    const exists = await FavoriteDino.exists({ user: userId, dino: dinoId });
+    const exists = await FavoriteDinoV2.exists({ user: userId, dino: dinoId });
 
     res.status(200).json({
       success: true,

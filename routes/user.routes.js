@@ -8,10 +8,10 @@ import {
   getUser,
   getUsers,
   uploadPhoto,
-  getFavoriteDinos,
-  addFavoriteDino,
-  deleteFavoriteDino,
-  isFavoriteDino,
+  getFavoriteDinosV2,
+  addFavoriteDinoV2,
+  deleteFavoriteDinoV2,
+  isFavoriteDinoV2,
 } from "../controllers/user.controller.js";
 
 const userRouter = Router();
@@ -26,9 +26,9 @@ userRouter.get("/images/:id", getPhoto);
 userRouter.post("/upload-image", uploadPhoto);
 userRouter.delete("/images/:id", deletePhoto);
 
-userRouter.get("/:userId/favorites", getFavoriteDinos);
-userRouter.post("/favorites", addFavoriteDino);
-userRouter.delete("/:userId/favorites/:dinoId", deleteFavoriteDino);
-userRouter.get("/:userId/favorites/check/:dinoId", isFavoriteDino);
+userRouter.get("/:userId/favorites", getFavoriteDinosV2);
+userRouter.post("/favorites", addFavoriteDinoV2);
+userRouter.delete("/:userId/favorites/:dinoId", deleteFavoriteDinoV2);
+userRouter.get("/:userId/favorites/check/:dinoId", isFavoriteDinoV2);
 
 export default userRouter;
