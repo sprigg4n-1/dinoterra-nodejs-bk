@@ -357,31 +357,31 @@ export const getFoundLocationsV2 = async (req, res, next) => {
   try {
     const { place, period } = req.query;
 
-    const aggregation = [
-      {
-        $lookup: {
-          from: "dinov2s",
-          localField: "dino",
-          foreignField: "_id",
-          as: "dinoData",
-        },
-      },
-      { $unwind: "$dinoData" },
-      {
-        $match: {
-          ...(place?.trim() && {
-            place: { $regex: place.trim(), $options: "i" },
-          }),
-          ...(period?.trim() && {
-            "dinoData.period": { $regex: period.trim(), $options: "i" },
-          }),
-        },
-      },
-    ];
+    let foundLocations = await FoundLocationV2.find({}).populate("dino");
 
-    const foundLocations = await FoundLocationV2.aggregate(aggregation);
+    foundLocations = foundLocations.filter((loc) => loc.dino != null);
 
-    res.status(200).json({ success: true, data: foundLocations });
+    if (place?.trim()) {
+      const regex = new RegExp(place.trim(), "i");
+      foundLocations = foundLocations.filter(
+        (loc) => regex.test(loc.place.uk) || regex.test(loc.place.en)
+      );
+    }
+
+    if (period?.trim()) {
+      const regex = new RegExp(period.trim(), "i");
+      foundLocations = foundLocations.filter((loc) => regex.test(loc.dino.period));
+    }
+
+    const data = foundLocations.map((loc) => ({
+      _id: loc._id,
+      place: loc.place,
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+      dino: loc.dino._id,
+    }));
+
+    res.status(200).json({ success: true, data });
   } catch (error) {
     next(error);
   }
