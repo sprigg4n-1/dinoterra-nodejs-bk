@@ -4,6 +4,7 @@ import DinoV2 from "../models/dinoV2.model.js";
 import DinoV2Image from "../models/dinoV2Image.model.js";
 import DinoV2ArticleImage from "../models/dinoV2ArticleImage.model.js";
 import FoundLocationV2 from "../models/foundLocationV2.model.js";
+import cloudinary from "../config/cloudinary.js";
 
 // GET /api/v2/dinos
 export const getDinosV2 = async (req, res, next) => {
@@ -269,12 +270,14 @@ export const uploadCoverImageV2 = async (req, res, next) => {
   try {
     const { dino, file, isMain } = req.body;
 
+    const uploaded = await cloudinary.uploader.upload(file, { folder: "dinoterra/dinos" });
+
     if (isMain) {
       await DinoV2Image.updateMany({ dino }, { isMain: false }, { session });
     }
 
     const [image] = await DinoV2Image.create(
-      [{ dino, file, isMain: isMain || false }],
+      [{ dino, file: uploaded.secure_url, isMain: isMain || false }],
       { session },
     );
 
@@ -319,7 +322,8 @@ export const uploadArticleImageV2 = async (req, res, next) => {
   try {
     const { dino, file, caption } = req.body;
 
-    const image = await DinoV2ArticleImage.create({ dino, file, caption });
+    const uploaded = await cloudinary.uploader.upload(file, { folder: "dinoterra/articles" });
+    const image = await DinoV2ArticleImage.create({ dino, file: uploaded.secure_url, caption });
 
     res.status(201).json({
       success: true,
