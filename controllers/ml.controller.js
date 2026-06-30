@@ -43,6 +43,19 @@ const getOrCreateStats = async () => {
   return stats;
 };
 
+// ── 0. HEALTH CHECK ───────────────────────────────────────────────────────────
+export const healthCheck = async (req, res) => {
+  try {
+    const response = await fetch(`${ML_API_URL}/retrain_status`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (response.ok) return res.sendStatus(200);
+    return res.sendStatus(503);
+  } catch {
+    return res.sendStatus(503);
+  }
+};
+
 // ── 1. USER CLASSIFY ──────────────────────────────────────────────────────────
 export const classify = async (req, res, next) => {
   const session = await mongoose.startSession();

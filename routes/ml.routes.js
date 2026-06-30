@@ -11,9 +11,12 @@ import {
   retrainDone,
   getRetrainHistory,
   getRetrainHistoryById,
+  healthCheck,
 } from "../controllers/ml.controller.js";
 
 const mlRouter = Router();
+
+mlRouter.get("/health", healthCheck);
 
 // User
 mlRouter.post("/classify", classify);
